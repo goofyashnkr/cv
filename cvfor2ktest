@@ -1,0 +1,261 @@
+import tkinter as tk
+import tkinter.font as tkFont
+import time
+from threading import Timer
+
+class ImmersiveEventTimerApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Basketball Training Utility")
+        self.root.geometry("1000x700")
+        self.root.configure(bg="#222222") # Deep dark gray background
+        
+        # --- State Variables ---
+        self.is_running = False
+        self.start_time = 0
+        self.total_duration = 5.0  # Entire cycle is 5 seconds
+        self.hit_point_time = 3.2  # The target "Hit Point"
+        self.hit_point_window = 0.2  # Timing window (±0.2s)
+        self.flashing = False
+        self.flashing_timer = None
+
+        # --- Font Setup ---
+        self.tech_font = tkFont.Font(family="Consolas", size=10, weight="normal")
+        self.title_font = tkFont.Font(family="Consolas", size=16, weight="bold")
+        self.feedback_font = tkFont.Font(family="Segoe UI", size=14, weight="bold")
+
+        # --- Main Layout ---
+        # Splitting the screen: Left for controls, Right for immersion
+        self.paned_window = tk.PanedWindow(root, orient=tk.HORIZONTAL, bg="#111111", sashrelief=tk.RAISED, sashwidth=4)
+        self.paned_window.pack(fill=tk.BOTH, expand=True)
+
+        self.controls_frame = tk.Frame(self.paned_window, bg="#111111", width=300)
+        self.paned_window.add(self.controls_frame)
+        self.immersive_frame = tk.Frame(self.paned_window, bg="#222222")
+        self.paned_window.add(self.immersive_frame)
+
+        # --- 1. Immersive Canvas Pane (Right) ---
+        self.canvas = tk.Canvas(self.immersive_frame, width=700, height=700, bg="#222222", highlightthickness=0)
+        self.canvas.pack(fill=tk.BOTH, expand=True)
+
+        # Place entire image context as background and elements
+        self.draw_static_scene()
+
+        # --- 2. Controls and Results Pane (Left) ---
+        tk.Label(self.controls_frame, text="TRAINING CONTROLS", font=self.title_font, fg="#4CAF50", bg="#111111").pack(pady=20)
+        
+        # Style buttons to fit the dark/neon theme
+        btn_frame = tk.Frame(self.controls_frame, bg="#111111")
+        btn_frame.pack(pady=10)
+        tk.Button(btn_frame, text="Start Meter", command=self.start_timer, 
+                  bg="#111111", fg="#00BCD4", font=self.feedback_font, bd=2, highlightthickness=0, 
+                  activebackground="#00BCD4", activeforeground="#ffffff", padx=10).pack(pady=5)
+        
+        tk.Button(btn_frame, text="Record Hit!", command=self.record_hit, 
+                  bg="#111111", fg="#FF9800", font=self.feedback_font, bd=2, highlightthickness=0, 
+                  activebackground="#FF9800", activeforeground="#ffffff", padx=10).pack(pady=5)
+        
+        tk.Button(btn_frame, text="Reset", command=self.reset_timer, 
+                  bg="#111111", fg="#F44336", font=self.feedback_font, bd=2, highlightthickness=0, 
+                  activebackground="#F44336", activeforeground="#ffffff", padx=10).pack(pady=5)
+
+        # Feedback area
+        feedback_frame = tk.Frame(self.controls_frame, bg="#111111")
+        feedback_frame.pack(fill=tk.BOTH, expand=True, pady=20, padx=10)
+        
+        tk.Label(feedback_frame, text="FEEDBACK LOG", font=self.title_font, fg="#dddddd", bg="#111111").pack(pady=5)
+        
+        # Display the current time on the control panel as well
+        self.time_label_control = tk.Label(feedback_frame, text="Time: 0.00s", font=self.tech_font, fg="#aaaaaa", bg="#111111")
+        self.time_label_control.pack(pady=5)
+        
+        # Result listbox with custom style
+        self.results_list = tk.Listbox(feedback_frame, width=25, height=15, font=self.tech_font, bg="#222222", fg="#00ff00", 
+                                      selectbackground="#00BCD4", selectforeground="#ffffff", bd=2, highlightthickness=0)
+        self.results_list.pack(pady=10)
+        
+        # Specific target feedback
+        self.results_list.insert(tk.END, "TARGET WINDOW:")
+        self.results_list.insert(tk.END, f"{self.hit_point_time - self.hit_point_window:.1f}s - {self.hit_point_time + self.hit_point_window:.1f}s")
+        self.results_list.insert(tk.END, "")
+
+    # --- Drawing Logic ---
+
+    def draw_static_scene(self):
+        # Draw blurred player details and background court lines
+        self.canvas.create_oval(600, 50, 750, 300, fill="#333333", outline="", width=0) # Blurred edge
+        self.canvas.create_text(715, 270, text="JERSEY 2", font=self.tech_font, fill="#555555", angle=20)
+        
+        # Recreate 'Triangles' box and title (exactly like image)
+        self.canvas.create_rectangle(150, 100, 450, 140, fill="#111111", outline="#555555")
+        self.canvas.create_text(300, 120, text="Triangles", font=self.title_font, fill="#aaaaaa")
+        
+        # Recreate 'Excellent' box, connecting lines, and text (exactly like image)
+        self.canvas.create_line(150, 140, 150, 180, fill="#00ff00") # Vertical connection
+        self.canvas.create_line(150, 180, 200, 180, fill="#00ff00") # Horizontal connection
+        self.canvas.create_line(200, 180, 250, 230, fill="#00ff00") # Sloped connection
+        self.canvas.create_line(450, 140, 500, 180, fill="#00ff00") # Symmetrical connections
+        self.canvas.create_line(500, 180, 550, 180, fill="#00ff00")
+        self.canvas.create_line(550, 180, 600, 230, fill="#00ff00")
+        
+        # Recreate 'Excellent' box with glowing effect (nested rectangles)
+        glowing_box_coords = (250, 230, 600, 280)
+        self.canvas.create_rectangle(*glowing_box_coords, fill="#00ff00", outline="#00ff00", width=4) # Strong neon fill
+        self.canvas.create_rectangle(*[c + i for c, i in zip(glowing_box_coords, (-2, -2, 2, 2))], fill="#00ff00", outline="#00ff00", width=1) # Outer outline
+        
+        self.canvas.create_text(425, 255, text="Excellent", font=tkFont.Font(family="Consolas", size=24, weight="bold"), fill="#111111")
+        
+        # The Meter base (dark with jagged outline)
+        meter_x_start = 300
+        meter_y_base = 650
+        meter_width = 80
+        
+        # Main grey body and V-shape jagged bottom (defined by a polygon)
+        grey_base_coords = [meter_x_start, meter_y_base, 
+                            meter_x_start + meter_width, meter_y_base,
+                            meter_x_start + meter_width, meter_y_base - 300,
+                            meter_x_start + meter_width/2, meter_y_base - 270, # Inside V
+                            meter_x_start, meter_y_base - 300]
+        self.canvas.create_polygon(grey_base_coords, fill="#555555", outline="", width=0)
+        
+        # Jagged white outline
+        jagged_outline_coords = [meter_x_start, meter_y_base - 300, 
+                               meter_x_start + meter_width/2, meter_y_base - 270, 
+                               meter_x_start + meter_width, meter_y_base - 300]
+        self.canvas.create_line(jagged_outline_coords, fill="#ffffff", width=2)
+        
+        # Setup segmented green fill polygons (stacked and hidden, like the texture)
+        self.segments = []
+        self.seg_height = 40
+        self.num_segments = 7
+        for i in range(self.num_segments):
+            y = (meter_y_base - 300) - (i * self.seg_height)
+            coords = [meter_x_start, y, meter_x_start + meter_width, y, 
+                      meter_x_start + meter_width, y - self.seg_height, 
+                      meter_x_start + meter_width/2, y - (self.seg_height * 0.7), # Pentagonal shape top
+                      meter_x_start, y - self.seg_height]
+            seg = self.canvas.create_polygon(coords, fill="#00ff00", outline="", width=0, state='hidden')
+            self.segments.append(seg)
+            # Add textured line detail over the segment
+            self.canvas.create_line(meter_x_start, y - (self.seg_height * 0.5), meter_x_start + meter_width, y - (self.seg_height * 0.5), fill="#111111", width=2)
+            
+        # Functional "Hit Point" marker and text (Your added feature)
+        # Position it explicitly over a segment (e.g., 3.2s is 64% full, corresponding to segment 4 from bottom)
+        target_y = (meter_y_base - 300) - (4.5 * self.seg_height) # Just above segment 4
+        crosshair_coords = (meter_x_start + meter_width/2 - 20, target_y - 20, meter_x_start + meter_width/2 + 20, target_y + 20)
+        self.canvas.create_line(meter_x_start + meter_width/2 - 30, target_y, meter_x_start + meter_width/2 + 30, target_y, fill="#00ff00", width=1)
+        self.canvas.create_line(meter_x_start + meter_width/2, target_y - 30, meter_x_start + meter_width/2, target_y + 30, fill="#00ff00", width=1)
+        self.hp_crosshair = self.canvas.create_oval(*crosshair_coords, outline="#ff0000", width=3) # Flashing red part
+        self.canvas.create_oval(*[c+1 for c,i in zip(crosshair_coords, (1,1,-1,-1))], outline="#00ff00", width=1) # Outer neon part
+        
+        self.canvas.create_text(meter_x_start + meter_width + 10, target_y, text=f"HIT POINT ({self.hit_point_time}s)", font=self.feedback_font, fill="#00ff00", anchor="w")
+        
+    # --- Timing and Logic Functions ---
+
+    def start_timer(self):
+        if not self.is_running:
+            self.is_running = True
+            self.start_time = time.time()
+            self.clear_feedbacks()
+            self.results_list.insert(tk.END, "TIMER STARTED...")
+            self.results_list.insert(tk.END, "")
+            self.start_flashing()
+            self.update_meter()
+
+    def update_meter(self):
+        if not self.is_running:
+            return
+        
+        elapsed = time.time() - self.start_time
+        self.time_label_control.config(text=f"Time: {elapsed:.2f}s")
+        
+        # Calculate filled segments based on time percentage
+        percentage_full = elapsed / self.total_duration
+        segments_filled = int(percentage_full * self.num_segments)
+        segments_filled = min(segments_filled, self.num_segments)
+        
+        for i, seg in enumerate(self.segments):
+            if i < segments_filled:
+                self.canvas.itemconfig(seg, state='normal') # Show segment
+            else:
+                self.canvas.itemconfig(seg, state='hidden') # Hide segment
+
+        if elapsed < self.total_duration:
+            self.root.after(20, self.update_meter)
+        else:
+            self.root.after(100, lambda: self.finish_cycle("Cycle complete.")) # Slight delay to see full meter
+
+    def finish_cycle(self, message):
+        self.is_running = False
+        self.stop_flashing()
+        self.results_list.insert(tk.END, message)
+
+    def record_hit(self):
+        if self.is_running:
+            elapsed = time.time() - self.start_time
+            # Evaluate timing against target window
+            feedback = ""
+            feedback_color = "#00ff00" # default Perfect/Good
+            
+            if abs(elapsed - self.hit_point_time) <= self.hit_point_window:
+                feedback = "Excellent!"
+                feedback_color = "#00ff00" # Green
+            elif elapsed < self.hit_point_time - self.hit_point_window:
+                feedback = "Early"
+                feedback_color = "#FF9800" # Orange
+            else:
+                feedback = "Late"
+                feedback_color = "#F44336" # Red
+                
+            result_str = f"Hit: {elapsed:.2f}s -> {feedback}"
+            self.results_list.insert(tk.END, result_str)
+            # Give a color to the specific list item for visual feedback
+            self.results_list.itemconfig(tk.END, fg=feedback_color)
+            self.finish_cycle("Result Recorded.")
+
+    def reset_timer(self):
+        self.is_running = False
+        self.stop_flashing()
+        for seg in self.segments:
+            self.canvas.itemconfig(seg, state='hidden')
+        self.time_label_control.config(text="Time: 0.00s")
+        self.clear_feedbacks()
+        self.results_list.insert(tk.END, "SYSTEM RESET.")
+
+    def clear_feedbacks(self):
+        self.results_list.delete(0, tk.END)
+        # Re-add target info
+        self.results_list.insert(tk.END, "TARGET WINDOW:")
+        self.results_list.insert(tk.END, f"{self.hit_point_time - self.hit_point_window:.1f}s - {self.hit_point_time + self.hit_point_window:.1f}s")
+        self.results_list.insert(tk.END, "")
+
+    def start_flashing(self):
+        self.flashing = True
+        self.flash()
+
+    def stop_flashing(self):
+        self.flashing = False
+        if self.flashing_timer:
+            self.flashing_timer.cancel()
+        # Ensure it's not hidden
+        self.canvas.itemconfig(self.hp_crosshair, state='normal')
+
+    def flash(self):
+        if not self.flashing:
+            return
+        
+        # Toggle visibility
+        current_state = self.canvas.itemcget(self.hp_crosshair, 'state')
+        new_state = 'hidden' if current_state == 'normal' else 'normal'
+        self.canvas.itemconfig(self.hp_crosshair, state=new_state)
+        
+        # Schedule next toggle (faster flash than update meter)
+        self.flashing_timer = Timer(0.2, self.flash) 
+        self.flashing_timer.start()
+
+# --- Execution ---
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = ImmersiveEventTimerApp(root)
+    app.reset_timer()
+    root.mainloop()
